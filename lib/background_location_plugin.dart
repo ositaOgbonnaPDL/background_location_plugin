@@ -1,3 +1,4 @@
+ // This Dart code implements a Flutter plugin for background location tracking. It uses a MethodChannel to communicate with native code and provides streams for location updates, verification results, and status changes.
 import 'dart:async';
 
 import 'package:flutter/services.dart';

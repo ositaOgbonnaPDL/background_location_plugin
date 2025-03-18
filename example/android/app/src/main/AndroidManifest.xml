@@ -1,13 +1,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<!-- Required permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- May not be necessary -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> 
     <application
         android:label="background_location_plugin_example"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- Foreground service declaration -->
+        <service
+            android:name=".BackgroundLocationService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- Boot receiver declaration -->
+        <receiver
+            android:name=".BootCompletedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <service android:name=".LocationService" android:foregroundServiceType="location" android:enabled="true" android:exported="false" />
         <activity
             android:name=".MainActivity"

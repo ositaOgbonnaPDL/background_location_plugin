@@ -276,113 +276,116 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
     }
   }
   
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    if call.method == "startService" {
-      guard let args = call.arguments as? [String: Any] else {
-        result(FlutterError(code: "INVALID_ARGUMENTS", message: "Arguments must be a dictionary", details: nil))
-        return
-      }
-
-      // Ensure all required parameters are present with proper types
-      guard let targetLat = args["targetLat"] as? Double,
-            let targetLng = args["targetLng"] as? Double,
-            let radius = args["bufferRadius"] as? Double,
-            let window = args["verificationWindow"] as? Double,
-            let threshold = args["verificationThreshold"] as? Double else {
-        result(FlutterError(code: "MISSING_PARAMETERS", 
-                            message: "Required parameters missing or have invalid types", 
-                            details: "All parameters (targetLat, targetLng, bufferRadius, verificationWindow, verificationThreshold) must be provided as Double values"))
-        return
-      }
-      
-      // Assign values to class properties
-      targetLatitude = targetLat
-      targetLongitude = targetLng
-      bufferRadius = radius
-      verificationWindow = window
-      verificationThreshold = threshold
-
-      // Only reset tracking variables if this is a new verification session
-      if !isServiceRunning {
-          totalTimeInside = 0.0
-          lastEntryTime = nil
-          verificationStartTime = Date()
-          isVerified = false
-          
-          NSLog("BackgroundLocationPlugin: Starting new verification session, reset totalTimeInside to 0.0s")
-          
-          // Log to Flutter side via methodChannel
-          DispatchQueue.main.async { [weak self] in
-            self?.methodChannel?.invokeMethod("logMessage", arguments: [
-              "message": "Starting new verification session, reset totalTimeInside to 0.0s",
-              "level": "info"
-            ])
-          }
-      } else {
-          NSLog("BackgroundLocationPlugin: Continuing existing session with totalTimeInside: \(totalTimeInside)s")
-          
-          // Log to Flutter side via methodChannel
-          DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.methodChannel?.invokeMethod("logMessage", arguments: [
-              "message": "Continuing existing session with totalTimeInside: \(self.totalTimeInside)s",
-              "level": "info"
-            ])
-          }
-      }
-
-      isServiceRunning = true
-      
-      // Request location permissions
-      requestLocationPermissions()
-      
-      // Set up verification window timer
-      verificationTimer?.invalidate()
-      verificationTimer = Timer.scheduledTimer(withTimeInterval: verificationWindow / 1000.0, repeats: false) { [weak self] _ in
-        self?.checkVerificationStatus()
-      }
-      
-      // Start status update timer
-      startStatusUpdateTimer()
-
-      // save state for possible app termination/restart
-      saveState()
-      
-      NSLog("BackgroundLocationPlugin: Started location service with target (\(targetLatitude), \(targetLongitude)), radius: \(bufferRadius)m")
-      result("iOS Service Started")
-
-    } else if call.method == "stopService" {
-      stopService()
-      result("iOS Service Stopped")
-    } else if call.method == "getVerificationStatus" {
-      // Calculate current time inside buffer, including current session if inside buffer
-      var currentTotalTimeInside = totalTimeInside
-      if let entryTime = lastEntryTime {
-        currentTotalTimeInside += Date().timeIntervalSince(entryTime)
-      }
-      
-      // Allow the app to query current verification status
-      let timeRemaining = getTimeRemaining()
-      let timeSpentInBuffer = currentTotalTimeInside
-      let timeNeededInBuffer = verificationThreshold / 1000.0
-      
-      let status: [String: Any] = [
-        "isRunning": isServiceRunning,
-        "timeRemaining": timeRemaining,
-        "timeSpentInBuffer": timeSpentInBuffer,
-        "timeNeededInBuffer": timeNeededInBuffer,
-        "isCurrentlyInBuffer": lastEntryTime != nil,
-        "isVerified": isVerified
-      ]
-      
-      result(status)
-    } else if call.method == "checkTotalTimeInsideValue" {
-      // New method to check totalTimeInside value directly from Flutter
-      result(["totalTimeInside": totalTimeInside])
-    } else {
-      result(FlutterMethodNotImplemented)
+public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+  if call.method == "startService" {
+    guard let args = call.arguments as? [String: Any] else {
+      result(FlutterError(code: "INVALID_ARGUMENTS", message: "Arguments must be a dictionary", details: nil))
+      return
     }
+
+    // Ensure all required parameters are provided
+    guard let targetLat = args["targetLat"] as? Double,
+          let targetLng = args["targetLng"] as? Double,
+          let radius = args["bufferRadius"] as? Double,
+          let window = args["verificationWindow"] as? Double,
+          let threshold = args["verificationThreshold"] as? Double else {
+      result(FlutterError(
+        code: "MISSING_PARAMETERS",
+        message: "Required parameters missing or have invalid types",
+        details: "All parameters (targetLat, targetLng, bufferRadius, verificationWindow, verificationThreshold) must be provided as Double values"
+      ))
+      return
+    }
+
+    // Assign new values
+    targetLatitude = targetLat
+    targetLongitude = targetLng
+    bufferRadius = radius
+    verificationWindow = window
+    verificationThreshold = threshold
+
+    let defaults = UserDefaults.standard
+    if let savedVerificationStartTime = defaults.object(forKey: verificationStartTimeKey) as? Date {
+      // There's an existing session; restore state instead of resetting
+      totalTimeInside = defaults.double(forKey: totalTimeInsideKey)
+      lastEntryTime = defaults.object(forKey: lastEntryTimeKey) as? Date
+      verificationStartTime = savedVerificationStartTime
+      isVerified = defaults.bool(forKey: isVerifiedKey)
+
+      NSLog("BackgroundLocationPlugin: Resuming session with totalTimeInside: \(totalTimeInside)s")
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        self.methodChannel?.invokeMethod("logMessage", arguments: [
+          "message": "Resuming session with totalTimeInside: \(self.totalTimeInside)s",
+          "level": "info"
+        ])
+      }
+    } else {
+      // No saved session, so initialize a new one
+      totalTimeInside = 0.0
+      lastEntryTime = nil
+      verificationStartTime = Date()
+      isVerified = false
+
+      NSLog("BackgroundLocationPlugin: Starting new session, resetting totalTimeInside")
+      DispatchQueue.main.async { [weak self] in
+        self?.methodChannel?.invokeMethod("logMessage", arguments: [
+          "message": "Starting new session, resetting totalTimeInside to 0.0s",
+          "level": "info"
+        ])
+      }
+    }
+
+    isServiceRunning = true
+
+    // Request location permissions and start tracking
+    requestLocationPermissions()
+
+    // Set up the verification timer using the remaining window if restoring a session;
+    // otherwise, use the full window.
+    verificationTimer?.invalidate()
+    var timerInterval = verificationWindow / 1000.0
+    if let savedStartTime = verificationStartTime {
+      let elapsedTime = Date().timeIntervalSince(savedStartTime) * 1000
+      timerInterval = max(0, (verificationWindow - elapsedTime) / 1000.0)
+    }
+    verificationTimer = Timer.scheduledTimer(withTimeInterval: timerInterval, repeats: false) { [weak self] _ in
+      self?.checkVerificationStatus()
+    }
+
+    startStatusUpdateTimer()
+    saveState()
+
+    NSLog("BackgroundLocationPlugin: Started location service with target (\(targetLatitude), \(targetLongitude)), radius: \(bufferRadius)m")
+    result("iOS Service Started")
+    
+  } else if call.method == "stopService" {
+    stopService()
+    result("iOS Service Stopped")
+  } else if call.method == "getVerificationStatus" {
+    // Calculate current time inside buffer, including current session if inside buffer
+    var currentTotalTimeInside = totalTimeInside
+    if let entryTime = lastEntryTime {
+      currentTotalTimeInside += Date().timeIntervalSince(entryTime)
+    }
+    
+    let timeRemaining = getTimeRemaining()
+    let status: [String: Any] = [
+      "isRunning": isServiceRunning,
+      "timeRemaining": timeRemaining,
+      "timeSpentInBuffer": currentTotalTimeInside,
+      "timeNeededInBuffer": verificationThreshold / 1000.0,
+      "isCurrentlyInBuffer": lastEntryTime != nil,
+      "isVerified": isVerified
+    ]
+    
+    result(status)
+  } else if call.method == "checkTotalTimeInsideValue" {
+    result(["totalTimeInside": totalTimeInside])
+  } else {
+    result(FlutterMethodNotImplemented)
   }
+}
 
   private func getTimeRemaining() -> Double {
     guard let startTime = verificationStartTime else { return 0 }

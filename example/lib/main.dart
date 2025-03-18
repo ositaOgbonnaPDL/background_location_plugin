@@ -115,11 +115,13 @@ class _MyAppState extends State<MyApp> {
   void _startVerification() async {
     await _requestPermissions();
     // Example parameters - in a real app, you would get these from user input or your backend
-    final targetLat = 6.622644;
-    final targetLng = 3.36055;
+    final targetLat = 37.785834;
+    final targetLng = -122.406417;
+    // final targetLat = 6.622644;
+    // final targetLng = 3.36055;
     final bufferRadius = 50.0; // 50 meters
-    final verificationWindow = 120000.0; // 10 minutes in milliseconds
-    final verificationThreshold = 60000.0; // 5 minutes in milliseconds
+    final verificationWindow = 240000.0; // 10 minutes in milliseconds
+    final verificationThreshold = 120000.0; // 5 minutes in milliseconds
 
     final result = await BackgroundLocationPlugin.startService(
       targetLat: targetLat,
