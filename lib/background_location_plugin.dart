@@ -33,8 +33,10 @@ class BackgroundLocationPlugin {
         case 'locationError':
           print("Location error: ${call.arguments}");
           break;
-        case 'totalTimeInside':
-          print("Total time inside buffer: ${call.arguments}");
+        case 'logMessage':
+          final message = call.arguments['message'] as String;
+          final level = call.arguments['level'] as String;
+          print('[BackgroundLocationPlugin] $level: $message');
           break;
       }
     });

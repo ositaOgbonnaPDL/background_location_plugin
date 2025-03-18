@@ -98,8 +98,22 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
       totalTimeInside = defaults.double(forKey: totalTimeInsideKey)
       isVerified = defaults.bool(forKey: isVerifiedKey)
 
+      // Log the totalTimeInside value to iOS console
+      NSLog("BackgroundLocationPlugin: RESTORED totalTimeInside: \(totalTimeInside)s")
+      print("BackgroundLocationPlugin: RESTORED totalTimeInside: \(totalTimeInside)s")
+      
+      // Log to Flutter side via methodChannel
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        self.methodChannel?.invokeMethod("logMessage", arguments: [
+          "message": "RESTORED totalTimeInside: \(self.totalTimeInside)s",
+          "level": "info"
+        ])
+      }
+
       if let entryTimeStamp = defaults.object(forKey: lastEntryTimeKey) as? Date {
         lastEntryTime = entryTimeStamp
+        NSLog("BackgroundLocationPlugin: Restored lastEntryTime: \(lastEntryTime!)")
       }
       
       if let startTimeStamp = defaults.object(forKey: verificationStartTimeKey) as? Date {
@@ -108,6 +122,14 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
         // Don't restart verification if already verified
         if isVerified {
           NSLog("BackgroundLocationPlugin: Restored already verified state")
+          
+          // Log to Flutter side via methodChannel
+          DispatchQueue.main.async { [weak self] in
+            self?.methodChannel?.invokeMethod("logMessage", arguments: [
+              "message": "Restored already verified state",
+              "level": "info"
+            ])
+          }
           return
         }
         
@@ -128,7 +150,17 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
           // Start the status update timer
           startStatusUpdateTimer()
           
-          NSLog("BackgroundLocationPlugin: Restored location service with \(remainingTime / 1000.0)s remaining")
+          let message = "Restored location service with \(remainingTime / 1000.0)s remaining and totalTimeInside: \(totalTimeInside)s"
+          NSLog("BackgroundLocationPlugin: \(message)")
+          
+          // Log to Flutter side via methodChannel
+          DispatchQueue.main.async { [weak self] in
+            self?.methodChannel?.invokeMethod("logMessage", arguments: [
+              "message": message,
+              "level": "info"
+            ])
+          }
+          
           showLocalNotification(title: "Location Verification", body: "Verification resumed after app restart")
         } else {
           // Verification window has expired
@@ -150,6 +182,21 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
     defaults.set(verificationStartTime, forKey: verificationStartTimeKey)
     defaults.set(isServiceRunning, forKey: isServiceRunningKey)
     defaults.set(isVerified, forKey: isVerifiedKey)
+    
+    // Force UserDefaults to save immediately
+    defaults.synchronize()
+    
+    // Log totalTimeInside when saving state
+    NSLog("BackgroundLocationPlugin: SAVED totalTimeInside: \(totalTimeInside)s")
+    
+    // Log to Flutter side via methodChannel
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.methodChannel?.invokeMethod("logMessage", arguments: [
+        "message": "SAVED totalTimeInside: \(self.totalTimeInside)s",
+        "level": "info"
+      ])
+    }
   }
   
   private func clearState() {
@@ -164,6 +211,19 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
     defaults.removeObject(forKey: verificationStartTimeKey)
     defaults.removeObject(forKey: isServiceRunningKey)
     defaults.removeObject(forKey: isVerifiedKey)
+    
+    // Force UserDefaults to save immediately
+    defaults.synchronize()
+    
+    NSLog("BackgroundLocationPlugin: Cleared all state")
+    
+    // Log to Flutter side via methodChannel
+    DispatchQueue.main.async { [weak self] in
+      self?.methodChannel?.invokeMethod("logMessage", arguments: [
+        "message": "Cleared all state",
+        "level": "info"
+      ])
+    }
   }
   
   private func startStatusUpdateTimer() {
@@ -248,8 +308,27 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
           lastEntryTime = nil
           verificationStartTime = Date()
           isVerified = false
+          
+          NSLog("BackgroundLocationPlugin: Starting new verification session, reset totalTimeInside to 0.0s")
+          
+          // Log to Flutter side via methodChannel
+          DispatchQueue.main.async { [weak self] in
+            self?.methodChannel?.invokeMethod("logMessage", arguments: [
+              "message": "Starting new verification session, reset totalTimeInside to 0.0s",
+              "level": "info"
+            ])
+          }
       } else {
           NSLog("BackgroundLocationPlugin: Continuing existing session with totalTimeInside: \(totalTimeInside)s")
+          
+          // Log to Flutter side via methodChannel
+          DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.methodChannel?.invokeMethod("logMessage", arguments: [
+              "message": "Continuing existing session with totalTimeInside: \(self.totalTimeInside)s",
+              "level": "info"
+            ])
+          }
       }
 
       isServiceRunning = true
@@ -297,6 +376,9 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
       ]
       
       result(status)
+    } else if call.method == "checkTotalTimeInsideValue" {
+      // New method to check totalTimeInside value directly from Flutter
+      result(["totalTimeInside": totalTimeInside])
     } else {
       result(FlutterMethodNotImplemented)
     }
@@ -321,8 +403,23 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
   private func checkVerificationStatus() {
     // If still inside buffer when timer expires, add elapsed time
     if let entryTime = lastEntryTime {
-      totalTimeInside += Date().timeIntervalSince(entryTime)
+      let additionalTime = Date().timeIntervalSince(entryTime)
+      totalTimeInside += additionalTime
       lastEntryTime = nil
+      
+      NSLog("BackgroundLocationPlugin: Adding \(additionalTime)s to totalTimeInside, new total: \(totalTimeInside)s")
+      
+      // Log to Flutter side via methodChannel
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        self.methodChannel?.invokeMethod("logMessage", arguments: [
+          "message": "Adding \(additionalTime)s to totalTimeInside, new total: \(self.totalTimeInside)s",
+          "level": "info"
+        ])
+      }
+      
+      // Save updated state before checking verification status
+      saveState()
     }
     
     // Check if threshold has been met
@@ -336,7 +433,16 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
   }
 
   private func sendResult(status: String) {
-    NSLog("BackgroundLocationPlugin: Verification result - \(status)")
+    NSLog("BackgroundLocationPlugin: Verification result - \(status) with totalTimeInside: \(totalTimeInside)s")
+    
+    // Log to Flutter side via methodChannel
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.methodChannel?.invokeMethod("logMessage", arguments: [
+        "message": "Verification result - \(status) with totalTimeInside: \(self.totalTimeInside)s",
+        "level": "info"
+      ])
+    }
 
     // Send local notification with result
     showLocalNotification(title: "Verification Complete", body: "Result: \(status)")
@@ -403,18 +509,42 @@ public class BackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManage
     if isInside {
       if lastEntryTime == nil {
         lastEntryTime = Date()
-        NSLog("BackgroundLocationPlugin: Entered buffer zone")
+        NSLog("BackgroundLocationPlugin: Entered buffer zone, current totalTimeInside: \(totalTimeInside)s")
+        
+        // Log to Flutter side via methodChannel
+        DispatchQueue.main.async { [weak self] in
+          guard let self = self else { return }
+          self.methodChannel?.invokeMethod("logMessage", arguments: [
+            "message": "Entered buffer zone, current totalTimeInside: \(self.totalTimeInside)s",
+            "level": "info"
+          ])
+        }
+        
         showLocalNotification(title: "Location Update", body: "You've entered the target area")
+        
+        // Save state when entering buffer
+        saveState()
       }
     } else {
       if let entryTime = lastEntryTime {
-        totalTimeInside += Date().timeIntervalSince(entryTime)
+        let additionalTime = Date().timeIntervalSince(entryTime)
+        totalTimeInside += additionalTime
         lastEntryTime = nil
         
-        // Save updated state
+        NSLog("BackgroundLocationPlugin: Left buffer zone. Added \(additionalTime)s, total time inside now: \(totalTimeInside)s")
+        
+        // Log to Flutter side via methodChannel
+        DispatchQueue.main.async { [weak self] in
+          guard let self = self else { return }
+          self.methodChannel?.invokeMethod("logMessage", arguments: [
+            "message": "Left buffer zone. Added \(additionalTime)s, total time inside now: \(self.totalTimeInside)s",
+            "level": "info"
+          ])
+        }
+        
+        // Save updated state immediately after updating totalTimeInside
         saveState()
         
-        NSLog("BackgroundLocationPlugin: Left buffer zone. Total time inside: \(totalTimeInside)s")
         showLocalNotification(title: "Location Update", body: "You've left the target area")
       }
     }
