@@ -1,0 +1,45 @@
+PODS:
+  - background_location_plugin (0.0.1):
+    - Flutter
+  - Flutter (1.0.0)
+  - GoogleMaps (6.2.1):
+    - GoogleMaps/Maps (= 6.2.1)
+  - GoogleMaps/Base (6.2.1)
+  - GoogleMaps/Maps (6.2.1):
+    - GoogleMaps/Base
+  - integration_test (0.0.1):
+    - Flutter
+  - permission_handler_apple (9.3.0):
+    - Flutter
+
+DEPENDENCIES:
+  - background_location_plugin (from `.symlinks/plugins/background_location_plugin/ios`)
+  - Flutter (from `Flutter`)
+  - GoogleMaps
+  - integration_test (from `.symlinks/plugins/integration_test/ios`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+
+SPEC REPOS:
+  trunk:
+    - GoogleMaps
+
+EXTERNAL SOURCES:
+  background_location_plugin:
+    :path: ".symlinks/plugins/background_location_plugin/ios"
+  Flutter:
+    :path: Flutter
+  integration_test:
+    :path: ".symlinks/plugins/integration_test/ios"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
+
+SPEC CHECKSUMS:
+  background_location_plugin: a5288edd8735e1db6605b314b00b09003d453c84
+  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  GoogleMaps: 20d7b12be49a14287f797e88e0e31bc4156aaeb4
+  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
+  permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
+
+PODFILE CHECKSUM: 94fed0b57ac3c0746a23b54c6aa67544625c2f83
+
+COCOAPODS: 1.16.2
